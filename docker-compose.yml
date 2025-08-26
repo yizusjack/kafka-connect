@@ -30,34 +30,41 @@ services:
     image: provectuslabs/kafka-ui:latest  # Kafka UI image by Provectus
     depends_on:
       - kafka
-      - debezium  # Ensures Kafka UI starts after Kafka and Debezium
+      - connect  # Ensures Kafka UI starts after Kafka and Debezium
     ports:
       - 8080:8080  # Expose UI on port 8080
     environment:
       KAFKA_CLUSTERS_0_NAME: local  # Name for the Kafka cluster in the UI
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092  # Kafka bootstrap server for the UI
       KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181  # Zookeeper connection for the UI
-      KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME: debezium
-      KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: http://debezium:8083
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME: connect
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: http://connect:8083
       DYNAMIC_CONFIG_ENABLED: 'true'
       AUTH_TYPE: LOGIN_FORM  # Authentication type for Kafka UI
       SPRING_SECURITY_USER_NAME: admin  # username to login to ui
       SPRING_SECURITY_USER_PASSWORD: Admin@123  # password to login to ui
 
-  # Debezium: Change Data Capture (CDC) connector
-  debezium:
-    image: debezium/connect:2.7.3.Final  # Official Debezium Connect image
+  connect:
+    image: debezium/connect:2.4
     depends_on:
       - kafka
-      - postgres  # Ensures Debezium starts after Kafka and PostgreSQL
+      - postgres
+      - postgres-target
     ports:
-      - 8083:8083  # Maps Debezium port 8083 from the container to the host, Expose Debezium Connect REST API
+      - 8083:8083
     environment:
-      GROUP_ID: 1001  # Unique ID for this Connect cluster
-      CONFIG_STORAGE_TOPIC: my_connect_configs  # Kafka topic for connector configs
-      OFFSET_STORAGE_TOPIC: my_connect_offsets  # Kafka topic for connector offsets
-      STATUS_STORAGE_TOPIC: my_connect_statuses  # Kafka topic for connector statuses
-      BOOTSTRAP_SERVERS: kafka:29092  # Kafka broker address
+      BOOTSTRAP_SERVERS: kafka:29092
+      GROUP_ID: "1"
+      CONFIG_STORAGE_TOPIC: "connect-configs"
+      OFFSET_STORAGE_TOPIC: "connect-offsets"
+      STATUS_STORAGE_TOPIC: "connect-status"
+      CONFIG_STORAGE_REPLICATION_FACTOR: "1"
+      OFFSET_STORAGE_REPLICATION_FACTOR: "1"
+      STATUS_STORAGE_REPLICATION_FACTOR: "1"
+      KEY_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+      VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
 
   # PostgreSQL: Source database
   postgres:
@@ -71,3 +78,12 @@ services:
     command: ["postgres", "-c", "wal_level=logical"]  # Enable logical replication
     volumes:
       - ./postgres-init.sql:/docker-entrypoint-initdb.d/postgres-init.sql  # Init script
+
+  postgres-target:
+    image: postgres:13  # Official PostgreSQL image
+    ports:
+      - 5434:5432  # Expose PostgreSQL on port 5434 to avoid conflicts
+    environment:
+      POSTGRES_DB: inventory   # Name of the PostgreSQL database
+      POSTGRES_USER: postgres     # Username for PostgreSQL
+      POSTGRES_PASSWORD: postgres   # Password for PostgreSQL
