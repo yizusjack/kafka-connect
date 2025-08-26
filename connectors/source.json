@@ -1,17 +1,17 @@
 {
-  "name": "pg-source-connector",
+  "name": "customer-source",
   "config": {
     "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
-    "tasks.max": "1",
-    "database.hostname": "postgres-source",
+    "database.hostname": "postgres",
     "database.port": "5432",
     "database.user": "postgres",
     "database.password": "postgres",
-    "database.dbname": "source",
-    "database.server.name": "postgres",
-    "topic.prefix": "postgres",
-    "schema.include.list": "public",
-    "table.include.list": "public.usuarios",
-    "plugin.name": "pgoutput"
+    "database.dbname": "inventory",
+    "database.server.name": "dbserver1",
+    "table.include.list": "public.customers",
+    "plugin.name": "pgoutput",
+    "slot.name": "inventory_slot",
+    "publication.name": "inventory_publication",
+    "topic.prefix": "dbserver1"
   }
 }

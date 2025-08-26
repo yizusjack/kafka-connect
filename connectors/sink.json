@@ -1,25 +1,19 @@
 {
-  "name": "pg-sink-connector",
+  "name": "customer-sink",
   "config": {
     "connector.class": "io.debezium.connector.jdbc.JdbcSinkConnector",
     "tasks.max": "1",
-    
-    "connection.url": "jdbc:postgresql://postgres-destino:5432/destino",
-    "connection.user": "postgres",
+    "topics": "dbserver1.public.customers",
+    "connection.url": "jdbc:postgresql://postgres-target:5432/inventory",
+    "connection.username": "postgres",
     "connection.password": "postgres",
-
-    "topics": "postgres.public.usuarios",
-    "table.name.format": "usuarios",
-
-    "insert.mode": "upsert",
-    "pk.mode": "record_key",
-    "pk.fields": "id",
-    "delete.enabled": "true",
-
-    "transforms": "unwrap",
-    "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
-
     "auto.create": "true",
-    "auto.evolve": "true"
+    "auto.evolve": "true",
+    "schema.evolution": "basic",
+    "insert.mode": "insert",
+    "delete.enabled": "true",
+    "primary.key.mode": "record_key",
+    "primary.key.fields": "id",
+    "table.name.format": "customers"
   }
 }
