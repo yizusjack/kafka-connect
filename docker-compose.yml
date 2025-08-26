@@ -1,68 +1,73 @@
 services:
+  # ZooKeeper: Distributed coordination service used by Kafka
   zookeeper:
-    image: confluentinc/cp-zookeeper:7.5.0
+    image: confluentinc/cp-zookeeper:7.2.15 # Official Confluent ZooKeeper image
     environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_CLIENT_PORT: 2181  # Port for client connections
+      ZOOKEEPER_TICK_TIME: 2000    # Basic time unit in milliseconds
     ports:
-      - 2181:2181
+      - 2181:2181  # Expose Zookeeper port 2181 from the container to the host
 
+  # Kafka: Distributed streaming platform
   kafka:
-    image: confluentinc/cp-kafka:7.5.0
+    image: confluentinc/cp-kafka:7.4.0  # Use specific version that supports ZooKeeper
     depends_on:
-      - zookeeper
+      - zookeeper  # Ensure ZooKeeper starts after Zookeeper
     ports:
-      - 9092:9092
+      - 9092:9092  # Expose Kafka port to the host
     environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_BROKER_ID: 1  # Unique ID for this broker
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181  # ZooKeeper connection string
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1  # Number of replicas for internal Kafka topics, set to 1 for single-node setup
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'  # Allow automatic topic creation
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0  # Reduce startup time
 
-  postgres-source:
-    image: debezium/postgres:15
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: source
-    ports:
-      - 5432:5432
-
-  postgres-destino:
-    image: postgres:15
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: destino
-    ports:
-      - 5433:5432
-
-  connect:
-    image: debezium/connect:2.2
-    ports:
-      - 8083:8083
-    environment:
-      BOOTSTRAP_SERVERS: kafka:9092
-      GROUP_ID: 1
-      CONFIG_STORAGE_TOPIC: connect-configs
-      OFFSET_STORAGE_TOPIC: connect-offsets
-      STATUS_STORAGE_TOPIC: connect-status
-      KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-      KEY_CONVERTER_SCHEMAS_ENABLE: "false"
-      VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
-      PLUGIN_PATH: /kafka/connect
-    volumes:
-      - ./connectors:/kafka/connectors
+  # Kafka UI: Web interface for Kafka management
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest  # Kafka UI image by Provectus
     depends_on:
       - kafka
-      - postgres-source
-      - postgres-destino
-
-  kafka-ui:
-    image: provectuslabs/kafka-ui:latest
+      - debezium  # Ensures Kafka UI starts after Kafka and Debezium
     ports:
-      - 8080:8080
+      - 8080:8080  # Expose UI on port 8080
     environment:
-      KAFKA_CLUSTERS_0_NAME: local
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
-      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+      KAFKA_CLUSTERS_0_NAME: local  # Name for the Kafka cluster in the UI
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092  # Kafka bootstrap server for the UI
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181  # Zookeeper connection for the UI
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME: debezium
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: http://debezium:8083
+      DYNAMIC_CONFIG_ENABLED: 'true'
+      AUTH_TYPE: LOGIN_FORM  # Authentication type for Kafka UI
+      SPRING_SECURITY_USER_NAME: admin  # username to login to ui
+      SPRING_SECURITY_USER_PASSWORD: Admin@123  # password to login to ui
+
+  # Debezium: Change Data Capture (CDC) connector
+  debezium:
+    image: debezium/connect:2.7.3.Final  # Official Debezium Connect image
+    depends_on:
+      - kafka
+      - postgres  # Ensures Debezium starts after Kafka and PostgreSQL
+    ports:
+      - 8083:8083  # Maps Debezium port 8083 from the container to the host, Expose Debezium Connect REST API
+    environment:
+      GROUP_ID: 1001  # Unique ID for this Connect cluster
+      CONFIG_STORAGE_TOPIC: my_connect_configs  # Kafka topic for connector configs
+      OFFSET_STORAGE_TOPIC: my_connect_offsets  # Kafka topic for connector offsets
+      STATUS_STORAGE_TOPIC: my_connect_statuses  # Kafka topic for connector statuses
+      BOOTSTRAP_SERVERS: kafka:29092  # Kafka broker address
+
+  # PostgreSQL: Source database
+  postgres:
+    image: postgres:13  # Official PostgreSQL image
+    ports:
+      - 5433:5432  # Expose PostgreSQL on port 5433 to avoid conflicts
+    environment:
+      POSTGRES_DB: inventory   # Name of the PostgreSQL database
+      POSTGRES_USER: postgres     # Username for PostgreSQL
+      POSTGRES_PASSWORD: postgres   # Password for PostgreSQL
+    command: ["postgres", "-c", "wal_level=logical"]  # Enable logical replication
+    volumes:
+      - ./postgres-init.sql:/docker-entrypoint-initdb.d/postgres-init.sql  # Init script
