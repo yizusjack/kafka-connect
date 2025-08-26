@@ -24,6 +24,8 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1  # Number of replicas for internal Kafka topics, set to 1 for single-node setup
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'  # Allow automatic topic creation
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0  # Reduce startup time
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1  # Fix for ksqlDB transactions
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1  # Fix for ksqlDB transactions
 
   # Kafka UI: Web interface for Kafka management
   kafka-ui:
@@ -87,3 +89,45 @@ services:
       POSTGRES_DB: inventory   # Name of the PostgreSQL database
       POSTGRES_USER: postgres     # Username for PostgreSQL
       POSTGRES_PASSWORD: postgres   # Password for PostgreSQL
+
+  # Schema Registry: Manages Avro schemas for Kafka topics
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.2.15
+    depends_on:
+      - kafka
+    ports:
+      - 8081:8081  # Expose Schema Registry API on port 8081
+    environment:
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: "kafka:29092"
+      SCHEMA_REGISTRY_HOST_NAME: "schema-registry"
+      SCHEMA_REGISTRY_LISTENERS: "http://0.0.0.0:8081"
+  
+  # ksqlDB: Streaming SQL engine for Apache Kafka
+  ksqldb-server:
+    image: confluentinc/ksqldb-server:0.29.0
+    depends_on:
+      - kafka
+    ports:
+      - 8088:8088  # Expose ksqlDB REST API on port 8088
+    environment:
+      KSQL_CONFIG_DIR: "/etc/ksqldb"
+      KSQL_BOOTSTRAP_SERVERS: "kafka:29092"
+      KSQL_LISTENERS: "http://0.0.0.0:8088"
+      KSQL_KSQL_SERVICE_ID: "ksql_service_"
+      KSQL_KSQL_SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
+      KSQL_KSQL_CONNECT_URL: "http://connect:8083"
+      KSQL_LOG4J_OPTS: "-Dlog4j.configuration=file:/etc/ksqldb/log4j.properties"
+    volumes:      
+      - ./files/ksqldb-server:/etc/ksqldb-server
+
+  # docker-compose exec ksqldb-cli  ksql http://ksqldb-server:8088
+  ksqldb-cli:
+    image: confluentinc/ksqldb-cli:0.14.0
+    container_name: ksqldb-cli
+    depends_on:
+      - kafka
+      - ksqldb-server
+    entrypoint: /bin/sh
+    tty: true
+    volumes:
+      - ./files/ksqldb-cli:/etc/sql
