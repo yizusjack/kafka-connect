@@ -80,6 +80,8 @@ services:
     command: ["postgres", "-c", "wal_level=logical"]  # Enable logical replication
     volumes:
       - ./postgres-init.sql:/docker-entrypoint-initdb.d/postgres-init.sql  # Init script
+      - 'postgres_data:/var/lib/postgresql/data'
+      - './backups:/mnt/storage/backups/'
 
   postgres-target:
     image: postgres:13  # Official PostgreSQL image
@@ -131,3 +133,6 @@ services:
     tty: true
     volumes:
       - ./files/ksqldb-cli:/etc/sql
+    
+volumes:
+  postgres_data:
